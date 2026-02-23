@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>FragShop</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">🧴</div>
+      <div>
+        <div class="title">FragShop</div>
+        <div class="sub">Inventory pulled live from GitHub Issues</div>
+      </div>
+    </div>
+
+    <div class="right">
+      <button id="refreshBtn" class="btn">Refresh</button>
+      <a id="inventoryRepoLink" class="btn ghost" target="_blank" rel="noreferrer">Inventory Repo</a>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="sidebar">
+      <div class="panel">
+        <div class="panelTitle">Filters</div>
+
+        <label class="label">Search</label>
+        <input id="searchInput" class="input" placeholder="house, name, type, size…" />
+
+        <label class="label">House</label>
+        <select id="houseSelect" class="input">
+          <option value="">All houses</option>
+        </select>
+
+        <label class="label">Sort</label>
+        <select id="sortSelect" class="input">
+          <option value="updated_desc">Recently updated</option>
+          <option value="price_asc">Price low → high</option>
+          <option value="price_desc">Price high → low</option>
+          <option value="house_asc">House A → Z</option>
+          <option value="name_asc">Name A → Z</option>
+        </select>
+
+        <div id="statusLine" class="statusLine">—</div>
+      </div>
+
+      <div class="panel">
+        <div class="panelTitle">Houses</div>
+        <div id="houseList" class="houseList"></div>
+      </div>
+    </aside>
+
+    <section class="content">
+      <div class="contentTop">
+        <div class="chips">
+          <span class="chip" id="countChip">0 items</span>
+          <span class="chip muted" id="noteChip">Only items tagged “In Stock”</span>
+        </div>
+      </div>
+
+      <div id="banner"></div>
+      <div id="list"></div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
