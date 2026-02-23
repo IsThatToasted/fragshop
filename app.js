@@ -487,7 +487,7 @@ function renderCard(it){
         <div class="badges">
           ${it.type ? `<span class="badge">${escapeHtml(it.type)}</span>` : ""}
           ${it.ml ? `<span class="badge">${escapeHtml(String(it.ml))} mL</span>` : ""}
-        
+          <a class="badge" href="${escapeAttr(it.url)}" target="_blank" rel="noreferrer">Listing</a>
           <a class="badge good"
              href="${escapeAttr(buildReserveUrl({ title: reserveTitle, body }))}"
              target="_blank" rel="noreferrer"
@@ -512,7 +512,8 @@ function renderCard(it){
           <div class="v">${money2(it.sample10Price)}</div>
         </div>
         <div class="box">
-          
+          <div class="k">Source</div>
+          <div class="v">${it.sourceLink ? `<a href="${escapeAttr(it.sourceLink)}" target="_blank" rel="noreferrer">Link</a>` : "—"}</div>
         </div>
       </div>
     </div>
@@ -529,6 +530,7 @@ function buildReserveBody(it){
   if (it.type) lines.push(`- **Type:** ${it.type}`);
   if (it.ml) lines.push(`- **Size:** ${it.ml} mL`);
   if (Number.isFinite(it.desiredSell)) lines.push(`- **Price:** ${money(it.desiredSell)}`);
+  lines.push(`- **Inventory link:** ${it.url}`);
   lines.push("");
   lines.push("## Your info");
   lines.push("- **Name:** ");
@@ -583,4 +585,3 @@ function escapeHtml(s){
     .replaceAll("'","&#039;");
 }
 function escapeAttr(s){ return escapeHtml(s).replaceAll("`","&#096;"); }
-
