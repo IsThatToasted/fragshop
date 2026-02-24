@@ -28,27 +28,35 @@ const CACHE_KEY = "shop_cache_v1";
 const ETAG_KEY  = "shop_etag_v1";
 const CACHE_TTL_MS = 1000 * 60 * (cfg.cacheMinutes || 10);
 
+// Image config
+const IMG_DIR = (cfg.imgDir || "imgs").replace(/^\/+/, "").replace(/\/+$/, "");
+const IMG_EXTS = (cfg.imgExts || ["png","jpg","jpeg","webp"]);
+const IMG_CACHE = new Map(); // key -> resolved url or ""
+
 init();
 
 function init(){
-  els.inventoryRepoLink.href = `https://github.com/${cfg.inventoryOwner}/${cfg.inventoryRepo}`;
-  els.inventoryRepoLink.textContent = `${cfg.inventoryOwner}/${cfg.inventoryRepo}`;
+  // ✅ Safe: repo link can be removed from HTML without crashing.
+  if (els.inventoryRepoLink){
+    els.inventoryRepoLink.href = `https://github.com/${cfg.inventoryOwner}/${cfg.inventoryRepo}`;
+    els.inventoryRepoLink.textContent = `${cfg.inventoryOwner}/${cfg.inventoryRepo}`;
+  }
 
-  els.refreshBtn.addEventListener("click", loadAll);
+  els.refreshBtn?.addEventListener("click", loadAll);
 
-  els.searchInput.addEventListener("input", () => {
+  els.searchInput?.addEventListener("input", () => {
     if ((els.searchInput.value || "").trim()) state.houseFocus = "";
     applyFilters();
   });
 
-  els.houseSelect.addEventListener("change", () => {
+  els.houseSelect?.addEventListener("change", () => {
     state.houseFocus = els.houseSelect.value || "";
     applyFilters();
   });
 
-  els.sortSelect.addEventListener("change", applyFilters);
+  els.sortSelect?.addEventListener("change", applyFilters);
 
-  els.houseList.addEventListener("click", (e) => {
+  els.houseList?.addEventListener("click", (e) => {
     const row = e.target.closest("[data-house]");
     if (!row) return;
     const house = row.getAttribute("data-house") || "";
@@ -58,7 +66,7 @@ function init(){
     else setHouseFocus(house);
   });
 
-  els.list.addEventListener("click", (e) => {
+  els.list?.addEventListener("click", (e) => {
     const toggle = e.target.closest("[data-toggle-house]");
     if (toggle){
       const house = toggle.getAttribute("data-toggle-house") || "";
@@ -69,14 +77,16 @@ function init(){
       return;
     }
 
+    // Image fallback handling (if an image fails to load)
+    const img = e.target.closest("img[data-img-key]");
+    if (img && img.dataset && img.dataset.imgKey){
+      // No-op here; errors handled by onerror inline.
+    }
+
     const reserve = e.target.closest("[data-reserve-url]");
     if (reserve){
-      const url = reserve.getAttribute("data-reserve-url") || "";
       const title = reserve.getAttribute("data-reserve-title") || "";
       const body = reserve.getAttribute("data-reserve-body") || "";
-      if (!url) return;
-
-      // Open reservation issue in shop repo with prefilled title/body
       const reserveUrl = buildReserveUrl({ title, body });
       window.open(reserveUrl, "_blank", "noopener,noreferrer");
       return;
@@ -88,8 +98,8 @@ function init(){
 
 function setHouseFocus(house){
   state.houseFocus = (house || "").trim();
-  els.houseSelect.value = state.houseFocus;
-  if (state.houseFocus) els.searchInput.value = "";
+  if (els.houseSelect) els.houseSelect.value = state.houseFocus;
+  if (state.houseFocus && els.searchInput) els.searchInput.value = "";
   applyFilters();
   try{ els.list.scrollIntoView({ behavior: "smooth", block: "start" }); }catch{}
 }
@@ -164,10 +174,10 @@ function isCacheFresh(payload){
 }
 
 async function loadAll(){
-  els.banner.innerHTML = "";
+  if (els.banner) els.banner.innerHTML = "";
   try{
-    els.refreshBtn.textContent = "Refreshing…";
-    els.statusLine.textContent = "Loading inventory…";
+    if (els.refreshBtn) els.refreshBtn.textContent = "Refreshing…";
+    if (els.statusLine) els.statusLine.textContent = "Loading inventory…";
 
     const cached = loadCache();
     if (cached && isCacheFresh(cached) && state.all.length === 0){
@@ -183,7 +193,7 @@ async function loadAll(){
       if (c?.items){
         state.all = c.items.map(normalizeIssue);
         applyFilters();
-        els.statusLine.textContent = "Loaded (cached, unchanged).";
+        if (els.statusLine) els.statusLine.textContent = "Loaded (cached, unchanged).";
         return;
       }
       const retry = await ghFetch(firstUrl, { useEtag: false });
@@ -197,17 +207,17 @@ async function loadAll(){
     if (cached?.items){
       state.all = cached.items.map(normalizeIssue);
       applyFilters();
-      els.banner.innerHTML = `<div class="banner"><b>Using last saved data.</b> ${escapeHtml(err.message)}</div>`;
-      els.statusLine.textContent = "Loaded (cached).";
+      if (els.banner) els.banner.innerHTML = `<div class="banner"><b>Using last saved data.</b> ${escapeHtml(err.message)}</div>`;
+      if (els.statusLine) els.statusLine.textContent = "Loaded (cached).";
       return;
     }
 
-    els.banner.innerHTML = `<div class="banner"><b>Couldn’t load inventory.</b> ${escapeHtml(err.message)}</div>`;
-    els.statusLine.textContent = "Error loading inventory.";
+    if (els.banner) els.banner.innerHTML = `<div class="banner"><b>Couldn’t load inventory.</b> ${escapeHtml(err.message)}</div>`;
+    if (els.statusLine) els.statusLine.textContent = "Error loading inventory.";
     state.all = [];
     applyFilters();
   }finally{
-    els.refreshBtn.textContent = "Refresh";
+    if (els.refreshBtn) els.refreshBtn.textContent = "Refresh";
   }
 }
 
@@ -230,7 +240,7 @@ async function loadRemainingPages(firstPageItems){
   saveCache(allRaw);
   state.all = allRaw.map(normalizeIssue);
   applyFilters();
-  els.statusLine.textContent = `Loaded ${state.all.length} items.`;
+  if (els.statusLine) els.statusLine.textContent = `Loaded ${state.all.length} items.`;
 }
 
 function normalizeIssue(issue){
@@ -249,6 +259,9 @@ function normalizeIssue(issue){
 
   const sourceLink = parsed.source_link || "";
 
+  // Image key + candidates
+  const img = resolveImageMeta({ designHouse, fragranceName });
+
   return {
     id: issue.id,
     number: issue.number,
@@ -266,6 +279,8 @@ function normalizeIssue(issue){
     sample10Price,
 
     sourceLink,
+
+    img, // { key, candidates[] }
   };
 }
 
@@ -331,8 +346,8 @@ function toNum(x){
 }
 
 function applyFilters(){
-  const q = (els.searchInput.value || "").trim().toLowerCase();
-  const sort = els.sortSelect.value;
+  const q = (els.searchInput?.value || "").trim().toLowerCase();
+  const sort = els.sortSelect?.value || "updated_desc";
   const house = state.houseFocus || "";
 
   let items = [...state.all];
@@ -363,7 +378,7 @@ function sortItems(items, mode){
   const copy = [...items];
   switch(mode){
     case "updated_desc":
-      return copy.sort((a,b) => (b.updated_at || "").localeCompare(b.updated_at || ""));
+      return copy.sort((a,b) => (b.updated_at || "").localeCompare(a.updated_at || ""));
     case "price_asc":
       return copy.sort((a,b) => (a.desiredSell ?? Infinity) - (b.desiredSell ?? Infinity));
     case "price_desc":
@@ -378,7 +393,7 @@ function sortItems(items, mode){
 }
 
 function rebuildHouseUI(){
-  const q = (els.searchInput.value || "").trim().toLowerCase();
+  const q = (els.searchInput?.value || "").trim().toLowerCase();
   let base = [...state.all];
 
   if (q){
@@ -396,43 +411,49 @@ function rebuildHouseUI(){
   const houses = Array.from(groups.keys()).sort((a,b)=>a.localeCompare(b));
   const current = state.houseFocus || "";
 
-  els.houseSelect.innerHTML = `<option value="">All houses</option>` + houses.map(h => {
-    const sel = (h === current) ? ` selected` : ``;
-    return `<option value="${escapeAttr(h)}"${sel}>${escapeHtml(h)}</option>`;
-  }).join("");
+  if (els.houseSelect){
+    els.houseSelect.innerHTML = `<option value="">All houses</option>` + houses.map(h => {
+      const sel = (h === current) ? ` selected` : ``;
+      return `<option value="${escapeAttr(h)}"${sel}>${escapeHtml(h)}</option>`;
+    }).join("");
+  }
 
-  els.houseList.innerHTML = houses.map(h => {
-    const arr = groups.get(h) || [];
-    const count = arr.length;
-    const ml = sum(arr.map(x => x.ml).filter(Boolean));
-    const desired = sum(arr.map(x => x.desiredSell).filter(Boolean));
-    const active = (current === h) ? " active" : "";
+  if (els.houseList){
+    els.houseList.innerHTML = houses.map(h => {
+      const arr = groups.get(h) || [];
+      const count = arr.length;
+      const ml = sum(arr.map(x => x.ml).filter(Boolean));
+      const desired = sum(arr.map(x => x.desiredSell).filter(Boolean));
+      const active = (current === h) ? " active" : "";
 
-    const meta = [
-      ml ? `${ml.toFixed(0)} mL` : null,
-      desired ? `Value ${money(desired)}` : null,
-    ].filter(Boolean).join(" • ");
+      const meta = [
+        ml ? `${ml.toFixed(0)} mL` : null,
+        desired ? `Value ${money(desired)}` : null,
+      ].filter(Boolean).join(" • ");
 
-    return `
-      <div class="houseRow${active}" data-house="${escapeAttr(h)}">
-        <div class="name">${escapeHtml(h)}</div>
-        <div class="count">${count}</div>
-        <div class="meta">${escapeHtml(meta || "—")}</div>
-      </div>
-    `;
-  }).join("") || `<div class="meta">No houses.</div>`;
+      return `
+        <div class="houseRow${active}" data-house="${escapeAttr(h)}">
+          <div class="name">${escapeHtml(h)}</div>
+          <div class="count">${count}</div>
+          <div class="meta">${escapeHtml(meta || "—")}</div>
+        </div>
+      `;
+    }).join("") || `<div class="meta">No houses.</div>`;
+  }
 }
 
 function render(){
-  els.countChip.textContent = `${state.filtered.length} item${state.filtered.length===1?"":"s"}`;
+  if (els.countChip) els.countChip.textContent = `${state.filtered.length} item${state.filtered.length===1?"":"s"}`;
 
   if (!state.filtered.length){
-    els.list.innerHTML = `<div class="banner">No matches.</div>`;
+    if (els.list) els.list.innerHTML = `<div class="banner">No matches.</div>`;
     return;
   }
 
   const groups = groupByHouse(state.filtered);
   const houses = Array.from(groups.keys()).sort((a,b)=>a.localeCompare(b));
+
+  if (!els.list) return;
 
   els.list.innerHTML = houses.map(house => {
     const arr = groups.get(house) || [];
@@ -471,22 +492,55 @@ function render(){
   }).join("");
 }
 
+/**
+ * Shopify-ish product card:
+ * - Image left
+ * - Title/subtitle center
+ * - Price + actions right
+ */
 function renderCard(it){
   const fullTitle = `${it.designHouse} - ${it.fragranceName}`.replace(/\s+/g," ").trim();
   const reserveTitle = `[RESERVE] ${fullTitle}${it.ml ? ` (${it.ml}mL)` : ""}`;
-
   const body = buildReserveBody(it);
 
+  const imgHtml = renderImage(it);
+
   return `
-    <div class="card">
-      <div class="cardTop">
-        <div>
-          <div class="cardTitle">${escapeHtml(it.fragranceName)}</div>
-          <div class="cardSub">${escapeHtml([it.designHouse, it.type, it.ml ? `${it.ml} mL` : null].filter(Boolean).join(" • ") || "—")}</div>
+    <div class="card productCard">
+      <div class="productMedia">
+        ${imgHtml}
+      </div>
+
+      <div class="productMain">
+        <div class="cardTitle">${escapeHtml(it.fragranceName)}</div>
+        <div class="cardSub">${escapeHtml([it.designHouse, it.type, it.ml ? `${it.ml} mL` : null].filter(Boolean).join(" • ") || "—")}</div>
+
+        <div class="kv compact">
+          <div class="box">
+            <div class="k">Price</div>
+            <div class="v">${money(it.desiredSell)}</div>
+          </div>
+          <div class="box">
+            <div class="k">$/mL</div>
+            <div class="v">${money4(it.desiredPerMl)}</div>
+          </div>
+          <div class="box">
+            <div class="k">10mL</div>
+            <div class="v">${money2(it.sample10Price)}</div>
+          </div>
+          <div class="box">
+            <div class="k">Source</div>
+            <div class="v">${it.sourceLink ? `<a href="${escapeAttr(it.sourceLink)}" target="_blank" rel="noreferrer">Link</a>` : "—"}</div>
+          </div>
         </div>
-        <div class="badges">
+      </div>
+
+      <div class="productActions">
+        <div class="priceBig">${money(it.desiredSell)}</div>
+        <div class="badges actions">
           ${it.type ? `<span class="badge">${escapeHtml(it.type)}</span>` : ""}
           ${it.ml ? `<span class="badge">${escapeHtml(String(it.ml))} mL</span>` : ""}
+          <a class="badge" href="${escapeAttr(it.url)}" target="_blank" rel="noreferrer">Listing</a>
           <a class="badge good"
              href="${escapeAttr(buildReserveUrl({ title: reserveTitle, body }))}"
              target="_blank" rel="noreferrer"
@@ -496,27 +550,83 @@ function renderCard(it){
           >Reserve</a>
         </div>
       </div>
-
-      <div class="kv">
-        <div class="box">
-          <div class="k">Price</div>
-          <div class="v">${money(it.desiredSell)}</div>
-        </div>
-        <div class="box">
-          <div class="k">Target $/mL</div>
-          <div class="v">${money4(it.desiredPerMl)}</div>
-        </div>
-        <div class="box">
-          <div class="k">Target (10mL)</div>
-          <div class="v">${money2(it.sample10Price)}</div>
-        </div>
-        <div class="box">
-          <div class="k">Source</div>
-          <div class="v">${it.sourceLink ? `<a href="${escapeAttr(it.sourceLink)}" target="_blank" rel="noreferrer">Link</a>` : "—"}</div>
-        </div>
-      </div>
     </div>
   `;
+}
+
+function renderImage(it){
+  const meta = it.img || resolveImageMeta({ designHouse: it.designHouse, fragranceName: it.fragranceName });
+  const key = meta.key;
+
+  // If we already resolved a working url for this key, reuse it.
+  const cached = IMG_CACHE.get(key);
+  if (cached){
+    return `<img class="productImg" src="${escapeAttr(cached)}" alt="${escapeAttr(it.fragranceName)}" loading="lazy" decoding="async" />`;
+  }
+
+  // We start with the first candidate; onerror rotates through candidates then uses placeholder.
+  const first = meta.candidates[0] || "";
+  const onerr = `
+    (function(img){
+      const key = img.dataset.imgKey;
+      const list = (img.dataset.imgCandidates||"").split("|").filter(Boolean);
+      let i = Number(img.dataset.imgIndex||"0");
+      i++;
+      if (i < list.length){
+        img.dataset.imgIndex = String(i);
+        img.src = list[i];
+        return;
+      }
+      img.classList.add("productImg--placeholder");
+      img.removeAttribute("src");
+      img.alt = "No image";
+    })(this);
+  `.trim().replace(/\s+/g," ");
+
+  // If first is empty, render placeholder
+  if (!first){
+    return `<div class="productImg productImg--placeholder" aria-label="No image"></div>`;
+  }
+
+  return `
+    <img class="productImg"
+         src="${escapeAttr(first)}"
+         alt="${escapeAttr(it.fragranceName)}"
+         loading="lazy"
+         decoding="async"
+         data-img-key="${escapeAttr(key)}"
+         data-img-index="0"
+         data-img-candidates="${escapeAttr(meta.candidates.join("|"))}"
+         onerror="${escapeAttr(onerr)}"
+         onload="${escapeAttr(`(function(img){ try{ IMG_CACHE.set(img.dataset.imgKey, img.currentSrc || img.src); }catch{} })(this);`)}"
+    />
+  `;
+}
+
+function resolveImageMeta({ designHouse, fragranceName }){
+  const houseSlug = slugify(designHouse || "");
+  const nameSlug = slugify(fragranceName || "");
+  const key = `${houseSlug}__${nameSlug}`;
+
+  const candidates = [];
+  if (houseSlug && nameSlug){
+    for (const ext of IMG_EXTS) candidates.push(`/${IMG_DIR}/${houseSlug}-${nameSlug}.${ext}`);
+  }
+  if (nameSlug){
+    for (const ext of IMG_EXTS) candidates.push(`/${IMG_DIR}/${nameSlug}.${ext}`);
+  }
+
+  return { key, candidates };
+}
+
+function slugify(s){
+  return String(s || "")
+    .toLowerCase()
+    .trim()
+    .replace(/&/g, "and")
+    .replace(/['"]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 function buildReserveBody(it){
@@ -584,4 +694,3 @@ function escapeHtml(s){
     .replaceAll("'","&#039;");
 }
 function escapeAttr(s){ return escapeHtml(s).replaceAll("`","&#096;"); }
-
