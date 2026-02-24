@@ -610,10 +610,10 @@ function resolveImageMeta({ designHouse, fragranceName }){
 
   const candidates = [];
   if (houseSlug && nameSlug){
-    for (const ext of IMG_EXTS) candidates.push(`/${IMG_DIR}/${houseSlug}-${nameSlug}.${ext}`);
+    for (const ext of IMG_EXTS) candidates.push(`${IMG_DIR}/${houseSlug}-${nameSlug}.${ext}`);
   }
   if (nameSlug){
-    for (const ext of IMG_EXTS) candidates.push(`/${IMG_DIR}/${nameSlug}.${ext}`);
+    for (const ext of IMG_EXTS) candidates.push(`${IMG_DIR}/${nameSlug}.${ext}`);
   }
 
   return { key, candidates };
@@ -694,3 +694,4 @@ function escapeHtml(s){
     .replaceAll("'","&#039;");
 }
 function escapeAttr(s){ return escapeHtml(s).replaceAll("`","&#096;"); }
+
