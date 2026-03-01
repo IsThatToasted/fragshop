@@ -72,8 +72,74 @@
 
   <div id="toast" class="toast hidden"></div>
 
+  <!-- Reserve Modal -->
+<div id="reserveModal" class="modal" aria-hidden="true">
+  <div class="modal__backdrop" data-close-modal></div>
+
+  <div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="reserveTitle">
+    <div class="modal__head">
+      <div>
+        <div id="reserveTitle" class="modal__title">Reserve</div>
+        <div id="reserveSubtitle" class="modal__sub">—</div>
+      </div>
+      <button class="modal__x" type="button" data-close-modal aria-label="Close">✕</button>
+    </div>
+
+    <form id="reserveForm" class="modal__form">
+      <!-- User -->
+      <div class="grid2">
+        <label class="field">
+          <span>Your name</span>
+          <input id="rf_name" name="name" autocomplete="name" required />
+        </label>
+
+        <label class="field">
+          <span>Contact (IG / Email / Whatnot)</span>
+          <input id="rf_contact" name="contact" autocomplete="email" required />
+        </label>
+      </div>
+
+      <div class="grid2">
+        <label class="field">
+          <span>Payment method</span>
+          <input id="rf_payment" name="payment_method" placeholder="Venmo, PayPal, Cash, etc." />
+        </label>
+
+        <label class="field">
+          <span>Shipping or pickup</span>
+          <input id="rf_delivery" name="delivery" placeholder="Ship / Local pickup" />
+        </label>
+      </div>
+
+      <label class="field">
+        <span>Notes (optional)</span>
+        <textarea id="rf_notes" name="notes" rows="4" placeholder="Anything you want me to know?"></textarea>
+      </label>
+
+      <!-- Item (hidden) -->
+      <input type="hidden" id="rf_item" name="item" />
+      <input type="hidden" id="rf_inventory_link" name="inventory_link" />
+      <input type="hidden" id="rf_price" name="price" />
+      <input type="hidden" id="rf_ml" name="ml" />
+      <input type="hidden" id="rf_type" name="type" />
+      <input type="hidden" id="rf_house" name="design_house" />
+      <input type="hidden" id="rf_fragrance" name="fragrance_name" />
+
+      <div class="modal__actions">
+        <button class="badge" type="button" data-close-modal>Cancel</button>
+        <button id="reserveSubmitBtn" class="badge good" type="submit">Send reservation</button>
+      </div>
+
+      <div class="modal__fineprint">
+        By submitting, you’re requesting a reservation — not a guaranteed hold.
+      </div>
+    </form>
+  </div>
+</div>
+
   <script src="config.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
+
 
