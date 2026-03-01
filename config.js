@@ -22,4 +22,10 @@ window.SHOP_CONFIG = {
   // Optional: include extra instructions in the prefilled issue body
   reservationInstructions:
     "Fill in your contact info below. The seller will confirm availability and reach out to finalize.",
+
+    // Formspree (required for the new Reserve flow)
+  formspreeEndpoint: "https://formspree.io/f/mgolbobk",  // <-- replace with your real one
+  formspreeSubjectPrefix: "FragShop Reserve",            // optional
+  keepReservationFields: true,                           // optional (keeps name/contact filled)
+
 };
