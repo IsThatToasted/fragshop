@@ -1,4 +1,4 @@
-// app.js (fragshop) - GitHub-only reservation issues (prefilled)
+// app.js (fragshop) - Inventory from GitHub Issues + Formspree reservation modal
 const cfg = window.SHOP_CONFIG;
 
 const els = {
@@ -15,6 +15,27 @@ const els = {
   banner: document.getElementById("banner"),
   list: document.getElementById("list"),
   toast: document.getElementById("toast"),
+
+  // Modal bits
+  reserveModal: document.getElementById("reserveModal"),
+  reserveForm: document.getElementById("reserveForm"),
+  reserveTitle: document.getElementById("reserveTitle"),
+  reserveSubtitle: document.getElementById("reserveSubtitle"),
+  reserveSubmitBtn: document.getElementById("reserveSubmitBtn"),
+
+  rf_name: document.getElementById("rf_name"),
+  rf_contact: document.getElementById("rf_contact"),
+  rf_payment: document.getElementById("rf_payment"),
+  rf_delivery: document.getElementById("rf_delivery"),
+  rf_notes: document.getElementById("rf_notes"),
+
+  rf_item: document.getElementById("rf_item"),
+  rf_inventory_link: document.getElementById("rf_inventory_link"),
+  rf_price: document.getElementById("rf_price"),
+  rf_ml: document.getElementById("rf_ml"),
+  rf_type: document.getElementById("rf_type"),
+  rf_house: document.getElementById("rf_house"),
+  rf_fragrance: document.getElementById("rf_fragrance"),
 };
 
 const state = {
@@ -22,6 +43,9 @@ const state = {
   filtered: [],
   houseFocus: "",
   expandedHouses: new Set(),
+
+  // current selected item for reservation
+  reserveItem: null,
 };
 
 const CACHE_KEY = "shop_cache_v1";
@@ -66,6 +90,23 @@ function init(){
     else setHouseFocus(house);
   });
 
+  // Reserve modal close actions (backdrop, X, cancel)
+  if (els.reserveModal){
+    els.reserveModal.addEventListener("click", (e) => {
+      const close = e.target.closest("[data-close-modal]");
+      if (close) closeReserveModal();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && isReserveModalOpen()) closeReserveModal();
+    });
+  }
+
+  // Reserve form submit -> Formspree
+  els.reserveForm?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    await submitReservationToFormspree();
+  });
+
   els.list?.addEventListener("click", (e) => {
     const toggle = e.target.closest("[data-toggle-house]");
     if (toggle){
@@ -83,12 +124,15 @@ function init(){
       // No-op here; errors handled by onerror inline.
     }
 
-    const reserve = e.target.closest("[data-reserve-url]");
+    const reserve = e.target.closest("[data-reserve-item]");
     if (reserve){
-      const title = reserve.getAttribute("data-reserve-title") || "";
-      const body = reserve.getAttribute("data-reserve-body") || "";
-      const reserveUrl = buildReserveUrl({ title, body });
-      window.open(reserveUrl, "_blank", "noopener,noreferrer");
+      const raw = reserve.getAttribute("data-reserve-item") || "";
+      try{
+        const it = JSON.parse(raw);
+        openReserveModal(it);
+      }catch{
+        toast("Could not open reservation form.", true);
+      }
       return;
     }
   });
@@ -499,11 +543,17 @@ function render(){
  * - Price + actions right
  */
 function renderCard(it){
-  const fullTitle = `${it.designHouse} - ${it.fragranceName}`.replace(/\s+/g," ").trim();
-  const reserveTitle = `[RESERVE] ${fullTitle}${it.ml ? ` (${it.ml}mL)` : ""}`;
-  const body = buildReserveBody(it);
-
   const imgHtml = renderImage(it);
+
+  // Put only the fields we need into the data payload
+  const payload = {
+    designHouse: it.designHouse || "Unknown",
+    fragranceName: it.fragranceName || "Unknown",
+    type: it.type || "",
+    ml: it.ml ?? null,
+    desiredSell: it.desiredSell ?? null,
+    url: it.url || "",
+  };
 
   return `
     <div class="card productCard">
@@ -541,13 +591,13 @@ function renderCard(it){
           ${it.type ? `<span class="badge">${escapeHtml(it.type)}</span>` : ""}
           ${it.ml ? `<span class="badge">${escapeHtml(String(it.ml))} mL</span>` : ""}
           <a class="badge" href="${escapeAttr(it.url)}" target="_blank" rel="noreferrer">Listing</a>
-          <a class="badge good"
-             href="${escapeAttr(buildReserveUrl({ title: reserveTitle, body }))}"
-             target="_blank" rel="noreferrer"
-             data-reserve-url="${escapeAttr(it.url)}"
-             data-reserve-title="${escapeAttr(reserveTitle)}"
-             data-reserve-body="${escapeAttr(body)}"
-          >Reserve</a>
+
+          <!-- Reserve via Formspree modal -->
+          <button class="badge good"
+                  type="button"
+                  data-reserve-item="${escapeAttr(JSON.stringify(payload))}">
+            Reserve
+          </button>
         </div>
       </div>
     </div>
@@ -629,37 +679,114 @@ function slugify(s){
     .replace(/^-+|-+$/g, "");
 }
 
-function buildReserveBody(it){
-  const lines = [];
-  lines.push(cfg.reservationInstructions || "Fill in your contact info below.");
-  lines.push("");
-  lines.push("## Item");
-  lines.push(`- **House:** ${it.designHouse || "Unknown"}`);
-  lines.push(`- **Name:** ${it.fragranceName || "Unknown"}`);
-  if (it.type) lines.push(`- **Type:** ${it.type}`);
-  if (it.ml) lines.push(`- **Size:** ${it.ml} mL`);
-  if (Number.isFinite(it.desiredSell)) lines.push(`- **Price:** ${money(it.desiredSell)}`);
-  lines.push(`- **Inventory link:** ${it.url}`);
-  lines.push("");
-  lines.push("## Your info");
-  lines.push("- **Name:** ");
-  lines.push("- **Contact (IG/Email/Whatnot):** ");
-  lines.push("- **Payment method:** ");
-  lines.push("- **Shipping or pickup:** ");
-  lines.push("");
-  lines.push("## Notes (optional)");
-  lines.push("");
+/* ---------------------------
+   Formspree Reservation Modal
+---------------------------- */
 
-  return lines.join("\n");
+function isReserveModalOpen(){
+  return !!(els.reserveModal && els.reserveModal.classList.contains("is-open"));
 }
 
-function buildReserveUrl({ title, body }){
-  const base = `https://github.com/${cfg.shopOwner}/${cfg.shopRepo}/issues/new`;
-  const labels = encodeURIComponent(cfg.reservationLabel || "reservation");
-  const t = encodeURIComponent(title || "[RESERVE] Item");
-  const b = encodeURIComponent(body || "");
-  return `${base}?labels=${labels}&title=${t}&body=${b}`;
+function openReserveModal(it){
+  if (!els.reserveModal || !els.reserveForm){
+    // Fallback: open Formspree endpoint directly if modal isn't present
+    toast("Reservation form is not installed in the page.", true);
+    return;
+  }
+
+  state.reserveItem = it;
+
+  const title = `${it.fragranceName || "Item"}${it.ml ? ` (${it.ml} mL)` : ""}`;
+  const sub = `${it.designHouse || "Unknown"}${it.type ? ` • ${it.type}` : ""}${Number.isFinite(it.desiredSell) ? ` • ${money(it.desiredSell)}` : ""}`;
+
+  if (els.reserveTitle) els.reserveTitle.textContent = "Reserve";
+  if (els.reserveSubtitle) els.reserveSubtitle.textContent = `${title} — ${sub}`;
+
+  // Fill hidden item fields
+  if (els.rf_item) els.rf_item.value = `${it.designHouse || "Unknown"} - ${it.fragranceName || "Unknown"}`.trim();
+  if (els.rf_inventory_link) els.rf_inventory_link.value = it.url || "";
+  if (els.rf_price) els.rf_price.value = Number.isFinite(it.desiredSell) ? money(it.desiredSell) : "";
+  if (els.rf_ml) els.rf_ml.value = (it.ml ?? "") ? String(it.ml) : "";
+  if (els.rf_type) els.rf_type.value = it.type || "";
+  if (els.rf_house) els.rf_house.value = it.designHouse || "Unknown";
+  if (els.rf_fragrance) els.rf_fragrance.value = it.fragranceName || "Unknown";
+
+  // Clear user fields (optional: keep values if you prefer)
+  if (cfg.keepReservationFields !== true){
+    if (els.rf_payment) els.rf_payment.value = "";
+    if (els.rf_delivery) els.rf_delivery.value = "";
+    if (els.rf_notes) els.rf_notes.value = "";
+  }
+
+  els.reserveModal.classList.add("is-open");
+  els.reserveModal.setAttribute("aria-hidden", "false");
+  try{ els.rf_name?.focus(); }catch{}
 }
+
+function closeReserveModal(){
+  if (!els.reserveModal) return;
+  els.reserveModal.classList.remove("is-open");
+  els.reserveModal.setAttribute("aria-hidden", "true");
+  state.reserveItem = null;
+}
+
+async function submitReservationToFormspree(){
+  const endpoint = (cfg.formspreeEndpoint || "").trim();
+  if (!endpoint){
+    toast("Formspree endpoint not configured in SHOP_CONFIG.", true);
+    return;
+  }
+  if (!els.reserveForm) return;
+
+  const fd = new FormData(els.reserveForm);
+
+  // Extra helpful meta
+  const it = state.reserveItem || {};
+  fd.append("submitted_from", location.href);
+  fd.append("inventory_repo", `${cfg.inventoryOwner}/${cfg.inventoryRepo}`);
+
+  // Optional subject line many people like in notifications
+  const subjPrefix = (cfg.formspreeSubjectPrefix || "FragShop Reserve").trim();
+  const subj = `${subjPrefix}: ${(it.designHouse || "Unknown")} - ${(it.fragranceName || "Item")}${it.ml ? ` (${it.ml}mL)` : ""}`;
+  fd.append("_subject", subj);
+
+  setReserveSubmitting(true);
+  try{
+    const res = await fetch(endpoint, {
+      method: "POST",
+      body: fd,
+      headers: { "Accept": "application/json" }
+    });
+
+    if (!res.ok){
+      let msg = `Form submit failed (${res.status}).`;
+      try{
+        const j = await res.json();
+        if (j?.errors?.length) msg = j.errors.map(e => e.message).join(" • ");
+      }catch{}
+      throw new Error(msg);
+    }
+
+    toast("Reservation sent! I’ll reach out soon.", false);
+    els.reserveForm.reset();
+    closeReserveModal();
+  }catch(err){
+    toast(err?.message || "Reservation failed.", true);
+  }finally{
+    setReserveSubmitting(false);
+  }
+}
+
+function setReserveSubmitting(isSubmitting){
+  if (els.reserveSubmitBtn){
+    els.reserveSubmitBtn.disabled = !!isSubmitting;
+    els.reserveSubmitBtn.textContent = isSubmitting ? "Sending…" : "Send reservation";
+  }
+}
+
+/* ---------------------------
+   Helpers
+---------------------------- */
 
 function groupByHouse(items){
   const m = new Map();
@@ -685,6 +812,15 @@ function money4(n){
 }
 function sum(arr){ return arr.reduce((a,b)=>a+(Number.isFinite(b)?b:0), 0); }
 
+function toast(msg, isBad){
+  if (!els.toast) return;
+  els.toast.textContent = msg;
+  els.toast.classList.toggle("bad", !!isBad);
+  els.toast.classList.add("show");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(()=> els.toast.classList.remove("show"), 2600);
+}
+
 function escapeHtml(s){
   return String(s ?? "")
     .replaceAll("&","&amp;")
@@ -694,4 +830,3 @@ function escapeHtml(s){
     .replaceAll("'","&#039;");
 }
 function escapeAttr(s){ return escapeHtml(s).replaceAll("`","&#096;"); }
-
